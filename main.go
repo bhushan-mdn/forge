@@ -6,7 +6,11 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	_ "embed"
 )
+
+//go:embed templates/main-cli.go
+var cliAppCode string
 
 func main() {
 	projectsDir := os.ExpandEnv("$HOME/projects/")
@@ -26,6 +30,7 @@ func main() {
 
 	projectPath := path.Clean(path.Join(projectsDir, *name))
 
+	// TODO: Add rollbacks for entire project creation
 	// 1. Check for existence
 	if _, err := os.Stat(projectPath); err == nil {
 		fmt.Println("sorry name already exists, come up with a better name already!")
