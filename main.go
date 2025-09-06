@@ -59,6 +59,14 @@ func main() {
 	switch *kind {
 	case "cli":
 		fmt.Println("forgin' cli project")
+		mainGoPath := path.Join(projectPath, "main.go")
+		fmt.Println("writing to", mainGoPath)
+		err := os.WriteFile(mainGoPath, []byte(cliAppCode), 0644)
+		if err != nil {
+			fmt.Println("error writing to main.go", err)
+			os.Exit(1)
+		}
+		fmt.Println("successfully written to", mainGoPath)
 	case "api":
 		fmt.Println("forgin' api project")
 	case "app":
