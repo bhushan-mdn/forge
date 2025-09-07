@@ -10,12 +10,16 @@ import (
 )
 
 //go:embed templates/main-cli.go
-var cliAppCode string
+var cliCode string
+//go:embed templates/main-api.go
+var apiCode string
+//go:embed templates/main-app.go
+var appCode string
 
 func main() {
 	projectsDir := os.ExpandEnv("$HOME/projects/")
 
-	name := flag.String("n", "my-project", "name of the project")
+	name := flag.String("n", "", "name of the project")
 	kind := flag.String("k", "cli", "kind of the project. kinds: cli, api, app") // TODO: add bgworker, change app to webapp if possible
 	// TODO: extras: add git init, options to choose libs / frameworks used.
 	// like for cli - flag, cli/v2, cobra
@@ -25,6 +29,11 @@ func main() {
 	// 	fe: htmx+templ, vue, alpine, svelte
 	// 	ui: tailwind, daisyui, bulma, pico, shadcn/ui
 	flag.Parse()
+
+	if *name == "" {
+		fmt.Println("please provide a name for project with -n")
+		os.Exit(1)
+	}
 
 	fmt.Printf("name: %+v, kind: %+v\n", *name, *kind)
 
@@ -61,7 +70,7 @@ func main() {
 		fmt.Println("forgin' cli project")
 		mainGoPath := path.Join(projectPath, "main.go")
 		fmt.Println("writing to", mainGoPath)
-		err := os.WriteFile(mainGoPath, []byte(cliAppCode), 0644)
+		err := os.WriteFile(mainGoPath, []byte(cliCode), 0644)
 		if err != nil {
 			fmt.Println("error writing to main.go", err)
 			os.Exit(1)
@@ -69,8 +78,27 @@ func main() {
 		fmt.Println("successfully written to", mainGoPath)
 	case "api":
 		fmt.Println("forgin' api project")
+		mainGoPath := path.Join(projectPath, "main.go")
+		fmt.Println("writing to", mainGoPath)
+		err := os.WriteFile(mainGoPath, []byte(apiCode), 0644)
+		if err != nil {
+			fmt.Println("error writing to main.go", err)
+			os.Exit(1)
+		}
+		fmt.Println("successfully written to", mainGoPath)
 	case "app":
 		fmt.Println("forgin' app project")
+		mainGoPath := path.Join(projectPath, "main.go")
+		fmt.Println("writing to", mainGoPath)
+		err := os.WriteFile(mainGoPath, []byte(appCode), 0644)
+		if err != nil {
+			fmt.Println("error writing to main.go", err)
+			os.Exit(1)
+		}
+		fmt.Println("successfully written to", mainGoPath)
+	default:
+		fmt.Println("unknown project kind")
+		os.Exit(1)
 	}
 
 	fmt.Printf("done. created project `%s` of kind `%s`\n", *name, *kind)
