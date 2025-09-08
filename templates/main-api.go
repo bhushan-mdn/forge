@@ -33,17 +33,17 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ok", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Encoding", "application/json")
-		w.Write([]byte(`{"message": "hello world"}`))
+		w.Write([]byte(`{"message": "ok"}`))
 	})
 	mux.HandleFunc("/bad", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Encoding", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(`{"message": "hello world"}`))
+		w.Write([]byte(`{"message": "bad request"}`))
 	})
 	mux.HandleFunc("/err", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Encoding", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"message": "hello world"}`))
+		w.Write([]byte(`{"message": "internal server error"}`))
 	})
 
 	server := http.Server{
