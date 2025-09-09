@@ -1,119 +1,132 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 	_ "embed"
 )
 
 //go:embed templates/main-cli.go
 var cliCode string
+
 //go:embed templates/main-api.go
 var apiCode string
+
 //go:embed templates/main-app.go
 var appCode string
 
+// A map to hold the template code for different project kinds.
+var templates = map[string]string{
+	"cli": cliCode,
+	"api": apiCode,
+	"app": appCode,
+}
+
+// A map to hold the Go dependencies for different frameworks.
+var dependencies = map[string][]string{
+	"cobra": {"github.com/spf13/cobra"},
+	"cli":   {"github.com/urfave/cli/v2"},
+}
+
 func main() {
+	log.SetFlags(0)
 	projectsDir := os.ExpandEnv("$HOME/projects/")
 
 	name := flag.String("n", "", "name of the project")
-	kind := flag.String("k", "cli", "kind of the project. kinds: cli, api, app") // TODO: add bgworker, change app to webapp if possible
+	kind := flag.String("k", "cli", "kind of the project. kinds: cli, api, app")
+	modulePath := flag.String("m", "", "Go module path (e.g., github.com/user/myproject)")
+	cliLib := flag.String("cli-lib", "flag", "CLI framework to use. Options: flag, cobra, cli")
 	git := flag.Bool("g", false, "initialize a git repository")
-	// TODO: extras: options to choose libs / frameworks used.
-	// like for cli - flag, cli/v2, cobra
-	// api - chi, echo, fiber, gin, beego
-	// app - this is where it gets complicated
-	// 	be: any of the above api servers
-	// 	fe: htmx+templ, vue, alpine, svelte
-	// 	ui: tailwind, daisyui, bulma, pico, shadcn/ui
+
 	flag.Parse()
 
 	if *name == "" {
-		fmt.Println("please provide a name for project with -n")
-		os.Exit(1)
+		log.Fatal("Please provide a project name with -n")
 	}
 
-	fmt.Printf("name: %+v, kind: %+v\n", *name, *kind)
+	// Use the project name for the module path if it's not provided.
+	if *modulePath == "" {
+		*modulePath = *name
+	}
 
 	projectPath := path.Clean(path.Join(projectsDir, *name))
 
-	// TODO: Add rollbacks for entire project creation,
-	// also even if directory exists, proceed if user wants to continue
-	// 1. Check for existence
+	// Check if directory exists and ask for confirmation.
 	if _, err := os.Stat(projectPath); err == nil {
-		fmt.Println("sorry name already exists, come up with a better name already!")
-		os.Exit(1)
-	}
-
-	// 2. Create directory
-	err := os.Mkdir(projectPath, 0755)
-	if err != nil {
-		fmt.Println("error creating directory:", err)
-		os.Exit(1)
-	}
-	fmt.Println("[✓] created project directory")
-
-	if *git {
-		fmt.Println("-g flag passed. initializing git repository")
-		// 2.5. Initialize git repository
-		gitInitCmd := exec.Command("git", "init")
-		gitInitCmd.Dir = projectPath
-		if err := gitInitCmd.Run(); err != nil {
-			fmt.Println("error initializing project:", err)
-			os.Exit(1)
+		fmt.Printf("Directory %s already exists. Do you want to continue? (y/n): ", projectPath)
+		reader := bufio.NewReader(os.Stdin)
+		response, _ := reader.ReadString('\n')
+		if strings.TrimSpace(response) != "y" {
+			log.Fatal("Operation aborted.")
 		}
-		fmt.Println("[✓] initialized git repository")
 	}
 
-	// 3. Initialize go module
-	// TODO: ask if use local path or scm path
-	cmd := exec.Command("go", "mod", "init", *name)
+	// 1. Create project directory
+	if err := os.MkdirAll(projectPath, 0755); err != nil {
+		log.Fatalf("Error creating directory: %v", err)
+	}
+	fmt.Println("[✓] Created project directory")
+
+	// 2. Initialize Go module
+	cmd := exec.Command("go", "mod", "init", *modulePath)
 	cmd.Dir = projectPath
 	if err := cmd.Run(); err != nil {
-		fmt.Println("error initializing project", err)
-		os.Exit(1)
+		// Clean up the created directory on failure.
+		os.RemoveAll(projectPath)
+		log.Fatalf("Error initializing Go module: %v", err)
 	}
-	fmt.Println("[✓] initialized go project")
+	fmt.Println("[✓] Initialized Go module")
 
-	// 4. Based on kind, add deps and copy templates
-	switch *kind {
-	case "cli":
-		fmt.Println("forgin' cli project")
-		mainGoPath := path.Join(projectPath, "main.go")
-		fmt.Println("writing to", mainGoPath)
-		err := os.WriteFile(mainGoPath, []byte(cliCode), 0644)
-		if err != nil {
-			fmt.Println("error writing to main.go:", err)
-			os.Exit(1)
+	// 3. Initialize Git repository
+	if *git {
+		if err := runCommand(projectPath, "git", "init"); err != nil {
+			os.RemoveAll(projectPath)
+			log.Fatalf("Error initializing Git repository: %v", err)
 		}
-		fmt.Println("[✓] successfully written to", mainGoPath)
-	case "api":
-		fmt.Println("forgin' api project")
-		mainGoPath := path.Join(projectPath, "main.go")
-		fmt.Println("writing to", mainGoPath)
-		err := os.WriteFile(mainGoPath, []byte(apiCode), 0644)
-		if err != nil {
-			fmt.Println("error writing to main.go:", err)
-			os.Exit(1)
-		}
-		fmt.Println("[✓] successfully written to", mainGoPath)
-	case "app":
-		fmt.Println("forgin' app project")
-		mainGoPath := path.Join(projectPath, "main.go")
-		fmt.Println("writing to", mainGoPath)
-		err := os.WriteFile(mainGoPath, []byte(appCode), 0644)
-		if err != nil {
-			fmt.Println("error writing to main.go:", err)
-			os.Exit(1)
-		}
-		fmt.Println("[✓] successfully written to", mainGoPath)
-	default:
-		fmt.Println("unknown project kind")
-		os.Exit(1)
+		fmt.Println("[✓] Initialized Git repository")
 	}
 
-	fmt.Printf("[✓] done. created project `%s` of kind `%s`\n", *name, *kind)
+	// 4. Add dependencies and write template file
+	if template, ok := templates[*kind]; ok {
+		// Check for specific CLI library dependencies.
+		if *kind == "cli" && *cliLib != "flag" {
+			if deps, ok := dependencies[*cliLib]; ok {
+				fmt.Printf("Adding dependencies for %s\n", *cliLib)
+				if err := runCommand(projectPath, "go", append([]string{"get"}, deps...)...); err != nil {
+					os.RemoveAll(projectPath)
+					log.Fatalf("Error getting dependencies: %v", err)
+				}
+				fmt.Println("[✓] Dependencies added")
+			} else {
+				log.Fatalf("Unknown CLI library: %s", *cliLib)
+			}
+		}
+
+		mainGoPath := path.Join(projectPath, "main.go")
+		if err := os.WriteFile(mainGoPath, []byte(template), 0644); err != nil {
+			os.RemoveAll(projectPath)
+			log.Fatalf("Error writing main.go: %v", err)
+		}
+		fmt.Println("[✓] Wrote main.go file")
+	} else {
+		os.RemoveAll(projectPath)
+		log.Fatalf("Unknown project kind: %s", *kind)
+	}
+
+	fmt.Printf("[✓] Done. Created project '%s' of kind '%s' in '%s'\n", *name, *kind, projectPath)
 }
+
+func runCommand(dir string, name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
