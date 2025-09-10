@@ -44,8 +44,7 @@ func main() {
 		Version: "0.1.0",
 		Authors: []*cli.Author{
 			{
-				Name:  "Gemini",
-				Email: "gemini@google.com",
+				Name:  "bhushan-mdn",
 			},
 		},
 		Commands: []*cli.Command{
