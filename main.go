@@ -46,7 +46,11 @@ func runCommand(dir string, name string, args ...string) error {
 
 // createProject contains all the logic for creating a new project.
 func createProject(c *cli.Context) error {
-	projectsDir := os.ExpandEnv("$HOME/projects/")
+	projectsDir :=  os.Getenv("PROJECTS_DIR")
+	if projectsDir == "" {
+		// use default projects dir
+		projectsDir = os.ExpandEnv("$HOME/projects/")
+	}
 	name := c.Args().First()
 	kind := c.String("kind")
 	modulePath := c.String("module-path")
