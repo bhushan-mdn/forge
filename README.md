@@ -13,11 +13,12 @@ USAGE:
    forge [global options] command [command options]
 
 VERSION:
-   0.1.0
+   0.1.1
 
 COMMANDS:
-   new      Creates a new project
-   help, h  Shows a list of commands or help for one command
+   new       Creates a new project in $PROJECTS_DIR
+   list, ls  List projects in $PROJECTS_DIR
+   help, h   Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
    --help, -h     show help

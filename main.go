@@ -2,13 +2,13 @@ package main
 
 import (
 	"bufio"
+	_ "embed"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path"
 	"strings"
-	_ "embed"
 
 	"github.com/urfave/cli/v2"
 )
@@ -35,6 +35,8 @@ var dependencies = map[string][]string{
 	"cli":   {"github.com/urfave/cli/v2"},
 }
 
+var projectsDir string
+
 // runCommand is a helper function to run an external command.
 func runCommand(dir string, name string, args ...string) error {
 	cmd := exec.Command(name, args...)
@@ -46,11 +48,6 @@ func runCommand(dir string, name string, args ...string) error {
 
 // createProject contains all the logic for creating a new project.
 func createProject(c *cli.Context) error {
-	projectsDir :=  os.Getenv("PROJECTS_DIR")
-	if projectsDir == "" {
-		// use default projects dir
-		projectsDir = os.ExpandEnv("$HOME/projects/")
-	}
 	name := c.Args().First()
 	kind := c.String("kind")
 	modulePath := c.String("module-path")
@@ -133,17 +130,39 @@ func createProject(c *cli.Context) error {
 	return nil
 }
 
+func listProjects(c *cli.Context) error {
+	entries, err := os.ReadDir(projectsDir)
+	if err != nil {
+		cli.Exit(fmt.Sprintf("Unable to read projectsDir: %v", err), 1)
+	}
+	var projectsCount int
+	for _, entry := range entries {
+		if entry.IsDir() {
+			projectsCount += 1
+			fmt.Println(" -", entry.Name())
+		}
+	}
+	fmt.Printf("Projects count: %d\n", projectsCount)
+	return nil
+}
+
 func main() {
 	log.SetFlags(0)
+
+	projectsDir = os.Getenv("PROJECTS_DIR")
+	if projectsDir == "" {
+		// use default projects dir
+		projectsDir = os.ExpandEnv("$HOME/projects/")
+	}
 
 	app := &cli.App{
 		Name:    "forge",
 		Usage:   "A simple Go project initializer",
-		Version: "0.1.0",
+		Version: "0.1.1",
 		Commands: []*cli.Command{
 			{
 				Name:      "new",
-				Usage:     "Creates a new project",
+				Usage:     "Creates a new project in $PROJECTS_DIR",
 				ArgsUsage: "<project-name>",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
@@ -170,6 +189,12 @@ func main() {
 					},
 				},
 				Action: createProject,
+			},
+			{
+				Name: "list",
+				Aliases: []string{"ls"},
+				Usage: "List projects in $PROJECTS_DIR",
+				Action: listProjects,
 			},
 		},
 	}
