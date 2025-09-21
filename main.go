@@ -139,7 +139,32 @@ func listProjects(c *cli.Context) error {
 	for _, entry := range entries {
 		if entry.IsDir() {
 			projectsCount += 1
-			fmt.Println(" -", entry.Name())
+
+			projectName := entry.Name()
+			contents, err := os.ReadDir(projectsDir + projectName)
+			if err != nil {
+				cli.Exit(fmt.Sprintf("Unable to read dir: %v", err), 1)
+			}
+			projectType := "unknown"
+			for _, c := range contents {
+				if !c.IsDir() {
+					switch c.Name() {
+					case "go.mod":
+						projectType = "go"
+						goto contentsEnd
+					case "Cargo.toml":
+						projectType = "rust"
+						goto contentsEnd
+					case "package.json":
+						projectType = "js"
+						goto contentsEnd
+
+					}
+				}
+			}
+			contentsEnd:
+
+			fmt.Printf(" - %s | type: %s\n", projectName, projectType)
 		}
 	}
 	fmt.Printf("Projects count: %d\n", projectsCount)
@@ -169,7 +194,7 @@ func main() {
 						Name:    "kind",
 						Aliases: []string{"k"},
 						Usage:   "Kind of the project. kinds: cli, api, app",
-						Value: "cli",
+						Value:   "cli",
 					},
 					&cli.StringFlag{
 						Name:    "module-path",
@@ -185,16 +210,16 @@ func main() {
 						Name:    "cli-lib",
 						Aliases: []string{"cl"},
 						Usage:   "CLI framework to use. Options: flag, cobra, cli",
-						Value: "flag",
+						Value:   "flag",
 					},
 				},
 				Action: createProject,
 			},
 			{
-				Name: "list",
+				Name:    "list",
 				Aliases: []string{"ls"},
-				Usage: "List projects in $PROJECTS_DIR",
-				Action: listProjects,
+				Usage:   "List projects in $PROJECTS_DIR",
+				Action:  listProjects,
 			},
 		},
 	}
@@ -203,4 +228,3 @@ func main() {
 		log.Fatal(err)
 	}
 }
-
