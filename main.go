@@ -158,6 +158,10 @@ func listProjects(c *cli.Context) error {
 					case "package.json":
 						projectType = "js"
 						goto contentsEnd
+					case "requirements.txt":
+					case ".venv":
+						projectType = "py"
+						goto contentsEnd
 
 					}
 				}
