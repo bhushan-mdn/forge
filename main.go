@@ -162,7 +162,9 @@ func listProjects(c *cli.Context) error {
 					case ".venv":
 						projectType = "py"
 						goto contentsEnd
-
+					case "mix.exs":
+						projectType = "py"
+						goto contentsEnd
 					}
 				}
 			}
