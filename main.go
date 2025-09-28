@@ -156,14 +156,17 @@ func listProjects(c *cli.Context) error {
 						projectType = "rust"
 						goto contentsEnd
 					case "package.json":
-						projectType = "js"
+						projectType = "node"
 						goto contentsEnd
 					case "requirements.txt":
 					case ".venv":
-						projectType = "py"
+						projectType = "python"
 						goto contentsEnd
 					case "mix.exs":
-						projectType = "py"
+						projectType = "elixir"
+						goto contentsEnd
+					case "build.zig":
+						projectType = "zig"
 						goto contentsEnd
 					}
 				}
