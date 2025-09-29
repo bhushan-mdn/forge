@@ -146,6 +146,7 @@ func listProjects(c *cli.Context) error {
 				cli.Exit(fmt.Sprintf("Unable to read dir: %v", err), 1)
 			}
 			projectType := "unknown"
+			gitRepo := "❌"
 			for _, c := range contents {
 				if !c.IsDir() {
 					switch c.Name() {
@@ -169,11 +170,15 @@ func listProjects(c *cli.Context) error {
 						projectType = "zig"
 						goto contentsEnd
 					}
+				} else {
+					if c.Name() == ".git" {
+						gitRepo = "✔️"
+					}
 				}
 			}
 			contentsEnd:
 
-			fmt.Printf(" - %s | type: %s\n", projectName, projectType)
+			fmt.Printf(" - %s | type: %s | git repo?: %s\n", projectName, projectType, gitRepo)
 		}
 	}
 	fmt.Printf("Projects count: %d\n", projectsCount)
