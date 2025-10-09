@@ -43,7 +43,11 @@ func runCommand(dir string, name string, args ...string) error {
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+        // Wrap the error to give context
+		return fmt.Errorf("command '%s' failed in %s: %w", name, dir, err)
+	}
+	return nil
 }
 
 // createProject contains all the logic for creating a new project.
@@ -144,7 +148,7 @@ func listProjects(c *cli.Context) error {
 			projectType := "unknown"
 			gitRepo := "❌"
 
-			contents, err := os.ReadDir(projectsDir + projectName)
+			contents, err := os.ReadDir(path.Join(projectsDir + projectName))
 			if err != nil {
 				cli.Exit(fmt.Sprintf("Unable to read dir: %v", err), 1)
 			}
