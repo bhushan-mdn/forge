@@ -13,14 +13,17 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-// ANSI Color Constants for modern CLI output
+// ANSI Color Constants for modern, structured CLI output
 const (
-	ColorReset  = "\033[0m"
-	ColorRed    = "\033[31m"
-	ColorGreen  = "\033[32m"
-	ColorYellow = "\033[33m"
-	ColorBlue   = "\033[34m"
-	StyleBold   = "\033[1m"
+	ColorReset     = "\033[0m"
+	ColorRed       = "\033[31m"
+	ColorGreen     = "\033[32m"
+	ColorYellow    = "\033[33m"
+	ColorBlue      = "\033[34m"
+	ColorCyan      = "\033[36m"
+	ColorWhiteBold = "\033[1;37m"
+	StyleBold      = "\033[1m"
+	StyleItalic    = "\033[3m"
 )
 
 //go:embed templates/main-cli.go
@@ -70,7 +73,7 @@ func createProject(c *cli.Context) error {
 	cleanupOnFailure := true
 	defer func() {
 		if cleanupOnFailure {
-			log.Printf(ColorRed+"[ ❌ ] Error occurred. Cleaning up directory: %s"+ColorReset, projectPath)
+			fmt.Printf("\n"+ColorRed+StyleBold+"[ ❌ FATAL ] "+ColorReset+"Cleaning up directory: %s\n", projectPath)
 			os.RemoveAll(projectPath)
 		}
 	}()
@@ -80,35 +83,39 @@ func createProject(c *cli.Context) error {
 		modulePath = name
 	}
 
-	// Check if directory exists and ask for confirmation.
+	// Modern, styled check for existence and confirmation.
 	if _, err := os.Stat(projectPath); err == nil {
-		fmt.Printf(ColorYellow+"Directory %s already exists. Do you want to proceed? (y/n): "+ColorReset, projectPath)
+		fmt.Printf(ColorYellow+StyleBold+"\n[ ⚠️  Warning ]"+ColorReset+" Directory exists: %s\n", projectPath)
+		fmt.Printf(ColorCyan + "         > " + ColorReset + "Overwrite contents? " + StyleBold + "(y/N): " + ColorReset)
+
 		reader := bufio.NewReader(os.Stdin)
 		response, _ := reader.ReadString('\n')
-		if strings.TrimSpace(response) != "y" {
+		if strings.TrimSpace(strings.ToLower(response)) != "y" {
 			cleanupOnFailure = false
-			return cli.Exit("Operation aborted by user.", 1)
+			return cli.Exit(ColorYellow+"Operation aborted by user."+ColorReset, 1)
 		}
 	}
+
+	fmt.Println("\n" + StyleBold + "--- Starting Forge Project Generation ---" + ColorReset)
 
 	// 1. Create project directory
 	if err := os.MkdirAll(projectPath, 0755); err != nil {
 		return cli.Exit(fmt.Sprintf(ColorRed+"Error creating directory: %v"+ColorReset, err), 1)
 	}
-	fmt.Println(ColorGreen + "[ ✔️ ] Created project directory" + ColorReset)
+	fmt.Println(ColorGreen + "[ ✔️ ] " + ColorReset + "Directory created: " + StyleItalic + projectPath + ColorReset)
 
 	// 2. Initialize Go module
 	if err := runCommand(projectPath, "go", "mod", "init", modulePath); err != nil {
 		return cli.Exit(fmt.Sprintf(ColorRed+"Error initializing Go module: %v"+ColorReset, err), 1)
 	}
-	fmt.Println(ColorGreen + "[ ✔️ ] Initialized Go module" + ColorReset)
+	fmt.Println(ColorGreen + "[ ✔️ ] " + ColorReset + "Initialized Go module: " + ColorBlue + modulePath + ColorReset)
 
 	// 3. Initialize Git repository
 	if git {
 		if err := runCommand(projectPath, "git", "init"); err != nil {
 			return cli.Exit(fmt.Sprintf(ColorRed+"Error initializing Git repository: %v"+ColorReset, err), 1)
 		}
-		fmt.Println(ColorGreen + "[ ✔️ ] Initialized Git repository" + ColorReset)
+		fmt.Println(ColorGreen + "[ ✔️ ] " + ColorReset + "Initialized Git repository")
 	}
 
 	// 4. Add dependencies and write template file
@@ -116,11 +123,11 @@ func createProject(c *cli.Context) error {
 		// Check for specific CLI library dependencies.
 		if kind == "cli" && cliLib != "flag" {
 			if deps, ok := dependencies[cliLib]; ok {
-				fmt.Printf(ColorBlue+"[ 📦 ] Adding dependencies for %s\n"+ColorReset, cliLib)
+				fmt.Printf(ColorBlue+"[ 📦 ] "+ColorReset+"Adding dependencies for " + StyleBold + cliLib + ColorReset + "\n")
 				if err := runCommand(projectPath, "go", append([]string{"get"}, deps...)...); err != nil {
 					return cli.Exit(fmt.Sprintf(ColorRed+"Error getting dependencies: %v"+ColorReset, err), 1)
 				}
-				fmt.Println(ColorGreen + "[ ✔️ ] Dependencies added" + ColorReset)
+				fmt.Println(ColorGreen + "[ ✔️ ] " + ColorReset + "Dependencies successfully installed")
 			} else {
 				return cli.Exit(fmt.Sprintf(ColorRed+"Unknown CLI library: %s"+ColorReset, cliLib), 1)
 			}
@@ -130,13 +137,16 @@ func createProject(c *cli.Context) error {
 		if err := os.WriteFile(mainGoPath, []byte(template), 0644); err != nil {
 			return cli.Exit(fmt.Sprintf(ColorRed+"Error writing main.go: %v"+ColorReset, err), 1)
 		}
-		fmt.Println(ColorGreen + "[ ✔️ ] Wrote main.go file" + ColorReset)
+		fmt.Println(ColorGreen + "[ ✔️ ] " + ColorReset + "Wrote initial main.go file")
 	} else {
 		return cli.Exit(fmt.Sprintf(ColorRed+"Unknown project kind: %s"+ColorReset, kind), 1)
 	}
 
-	fmt.Printf("\n"+ColorGreen+StyleBold+"[ ✨ SUCCESS ] Project '%s' (%s) created"+ColorReset+" in %s\n\n", name, kind, projectPath)
-	cleanupOnFailure = false // Set cleanup to false on successful completion
+	// Final success block (modern, structured output)
+	fmt.Printf("\n"+ColorGreen+StyleBold+"[ ✨ SUCCESS ] Project '%s' is ready!\n"+ColorReset, name)
+	fmt.Printf(ColorWhiteBold+"  Kind: %-10s Module: %s\n\n"+ColorReset, kind, modulePath)
+
+	cleanupOnFailure = false
 	return nil
 }
 
@@ -175,7 +185,7 @@ func detectProjectType(contents []os.DirEntry) (projectType string, isGitRepo bo
 		}
 	}
 
-	// Handle Python secondary check (for simple projects lacking requirements.txt but maybe having .venv)
+	// Handle Python secondary check
 	if projectType == "unknown" {
 		for _, c := range contents {
 			if c.Name() == ".venv" && c.IsDir() {
@@ -199,10 +209,10 @@ func listProjects(c *cli.Context) error {
 	var projectsCount int
 	const sepLine = "------------------------------------------------------"
 
-	// Clean, aligned header
-	fmt.Printf(StyleBold+"\nProjects Directory: %s\n"+ColorReset, projectsDir)
+	// Modern, colorized header block
+	fmt.Printf(ColorCyan+StyleBold+"\n--- PROJECTS IN %s ---\n"+ColorReset, strings.ToUpper(projectsDir))
 	fmt.Println(ColorBlue + sepLine + ColorReset)
-	fmt.Printf(StyleBold + "| %-20s | %-10s | %-5s |\n" + ColorReset, "PROJECT NAME", "TYPE", "GIT")
+	fmt.Printf(ColorBlue + StyleBold + "| %-20s | %-10s | %-5s |\n" + ColorReset, "PROJECT NAME", "TYPE", "GIT")
 	fmt.Println(ColorBlue + sepLine + ColorReset)
 
 
@@ -227,14 +237,14 @@ func listProjects(c *cli.Context) error {
 
 		projectsCount++
 
-		// Colorize status
+		// Colorize status symbols
 		gitRepoStatus := ColorRed + "❌" + ColorReset
 		if isGitRepo {
 			gitRepoStatus = ColorGreen + "✔️" + ColorReset
 		}
 
-		// Colorize type
-		typeColor := ColorReset // Default
+		// Colorize type names
+		typeColor := ColorReset
 		switch projectType {
 		case "go":
 			typeColor = ColorBlue
@@ -248,8 +258,7 @@ func listProjects(c *cli.Context) error {
 			typeColor = ColorReset
 		}
 
-		// 3. Print the results using fixed-width alignment
-		// Use ColorReset immediately after the color code to avoid issues with alignment
+		// 3. Print the results using fixed-width alignment and embedded colors
 		fmt.Printf("| "+StyleBold+"%-20s "+ColorReset+"| %s%-10s%s | %s%-5s %s|\n",
 			projectName,
 			typeColor, projectType, ColorReset,
@@ -274,18 +283,18 @@ func main() {
 
 	app := &cli.App{
 		Name:    "forge",
-		Usage:   "A simple Go project initializer",
-		Version: "0.1.3",
+		Usage:   "The ultimate project launcher. Fast. Minimal. Dope.",
+		Version: "0.1.4",
 		Commands: []*cli.Command{
 			{
 				Name:      "new",
-				Usage:     "Creates a new project in $PROJECTS_DIR",
+				Usage:     "Creates a fresh project in $HOME/projects",
 				ArgsUsage: "<project-name>",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:    "kind",
 						Aliases: []string{"k"},
-						Usage:   "Kind of the project. kinds: cli, api, app",
+						Usage:   "Project flavor: cli, api, or app",
 						Value:   "cli",
 					},
 					&cli.StringFlag{
@@ -296,7 +305,7 @@ func main() {
 					&cli.BoolFlag{
 						Name:    "git",
 						Aliases: []string{"g"},
-						Usage:   "Initialize a git repository",
+						Usage:   "Initialize a git repository 🤘",
 					},
 					&cli.StringFlag{
 						Name:    "cli-lib",
@@ -310,7 +319,7 @@ func main() {
 			{
 				Name:    "list",
 				Aliases: []string{"ls"},
-				Usage:   "List projects in $PROJECTS_DIR",
+				Usage:   "See what's cookin' in $HOME/projects",
 				Action:  listProjects,
 			},
 		},
