@@ -13,6 +13,16 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+// ANSI Color Constants for modern CLI output
+const (
+	ColorReset  = "\033[0m"
+	ColorRed    = "\033[31m"
+	ColorGreen  = "\033[32m"
+	ColorYellow = "\033[33m"
+	ColorBlue   = "\033[34m"
+	StyleBold   = "\033[1m"
+)
+
 //go:embed templates/main-cli.go
 var cliCode string
 
@@ -43,11 +53,7 @@ func runCommand(dir string, name string, args ...string) error {
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-        // Wrap the error to give context
-		return fmt.Errorf("command '%s' failed in %s: %w", name, dir, err)
-	}
-	return nil
+	return cmd.Run()
 }
 
 // createProject contains all the logic for creating a new project.
@@ -64,7 +70,7 @@ func createProject(c *cli.Context) error {
 	cleanupOnFailure := true
 	defer func() {
 		if cleanupOnFailure {
-			log.Printf("An error occurred. Cleaning up directory: %s", projectPath)
+			log.Printf(ColorRed+"[ ❌ ] Error occurred. Cleaning up directory: %s"+ColorReset, projectPath)
 			os.RemoveAll(projectPath)
 		}
 	}()
@@ -76,33 +82,33 @@ func createProject(c *cli.Context) error {
 
 	// Check if directory exists and ask for confirmation.
 	if _, err := os.Stat(projectPath); err == nil {
-		fmt.Printf("Directory %s already exists. Do you want to continue? (y/n): ", projectPath)
+		fmt.Printf(ColorYellow+"Directory %s already exists. Do you want to proceed? (y/n): "+ColorReset, projectPath)
 		reader := bufio.NewReader(os.Stdin)
 		response, _ := reader.ReadString('\n')
 		if strings.TrimSpace(response) != "y" {
 			cleanupOnFailure = false
-			return cli.Exit("Operation aborted.", 1)
+			return cli.Exit("Operation aborted by user.", 1)
 		}
 	}
 
 	// 1. Create project directory
 	if err := os.MkdirAll(projectPath, 0755); err != nil {
-		return cli.Exit(fmt.Sprintf("Error creating directory: %v", err), 1)
+		return cli.Exit(fmt.Sprintf(ColorRed+"Error creating directory: %v"+ColorReset, err), 1)
 	}
-	fmt.Println("[✓] Created project directory")
+	fmt.Println(ColorGreen + "[ ✔️ ] Created project directory" + ColorReset)
 
 	// 2. Initialize Go module
 	if err := runCommand(projectPath, "go", "mod", "init", modulePath); err != nil {
-		return cli.Exit(fmt.Sprintf("Error initializing Go module: %v", err), 1)
+		return cli.Exit(fmt.Sprintf(ColorRed+"Error initializing Go module: %v"+ColorReset, err), 1)
 	}
-	fmt.Println("[✓] Initialized Go module")
+	fmt.Println(ColorGreen + "[ ✔️ ] Initialized Go module" + ColorReset)
 
 	// 3. Initialize Git repository
 	if git {
 		if err := runCommand(projectPath, "git", "init"); err != nil {
-			return cli.Exit(fmt.Sprintf("Error initializing Git repository: %v", err), 1)
+			return cli.Exit(fmt.Sprintf(ColorRed+"Error initializing Git repository: %v"+ColorReset, err), 1)
 		}
-		fmt.Println("[✓] Initialized Git repository")
+		fmt.Println(ColorGreen + "[ ✔️ ] Initialized Git repository" + ColorReset)
 	}
 
 	// 4. Add dependencies and write template file
@@ -110,78 +116,150 @@ func createProject(c *cli.Context) error {
 		// Check for specific CLI library dependencies.
 		if kind == "cli" && cliLib != "flag" {
 			if deps, ok := dependencies[cliLib]; ok {
-				fmt.Printf("Adding dependencies for %s\n", cliLib)
+				fmt.Printf(ColorBlue+"[ 📦 ] Adding dependencies for %s\n"+ColorReset, cliLib)
 				if err := runCommand(projectPath, "go", append([]string{"get"}, deps...)...); err != nil {
-					return cli.Exit(fmt.Sprintf("Error getting dependencies: %v", err), 1)
+					return cli.Exit(fmt.Sprintf(ColorRed+"Error getting dependencies: %v"+ColorReset, err), 1)
 				}
-				fmt.Println("[✓] Dependencies added")
+				fmt.Println(ColorGreen + "[ ✔️ ] Dependencies added" + ColorReset)
 			} else {
-				return cli.Exit(fmt.Sprintf("Unknown CLI library: %s", cliLib), 1)
+				return cli.Exit(fmt.Sprintf(ColorRed+"Unknown CLI library: %s"+ColorReset, cliLib), 1)
 			}
 		}
 
 		mainGoPath := path.Join(projectPath, "main.go")
 		if err := os.WriteFile(mainGoPath, []byte(template), 0644); err != nil {
-			return cli.Exit(fmt.Sprintf("Error writing main.go: %v", err), 1)
+			return cli.Exit(fmt.Sprintf(ColorRed+"Error writing main.go: %v"+ColorReset, err), 1)
 		}
-		fmt.Println("[✓] Wrote main.go file")
+		fmt.Println(ColorGreen + "[ ✔️ ] Wrote main.go file" + ColorReset)
 	} else {
-		return cli.Exit(fmt.Sprintf("Unknown project kind: %s", kind), 1)
+		return cli.Exit(fmt.Sprintf(ColorRed+"Unknown project kind: %s"+ColorReset, kind), 1)
 	}
 
-	fmt.Printf("[✓] Done. Created project '%s' of kind '%s' in '%s'\n", name, kind, projectPath)
+	fmt.Printf("\n"+ColorGreen+StyleBold+"[ ✨ SUCCESS ] Project '%s' (%s) created"+ColorReset+" in %s\n\n", name, kind, projectPath)
 	cleanupOnFailure = false // Set cleanup to false on successful completion
 	return nil
 }
 
-func listProjects(c *cli.Context) error {
-	entries, err := os.ReadDir(projectsDir)
-	if err != nil {
-		cli.Exit(fmt.Sprintf("Unable to read projectsDir: %v", err), 1)
+// detectProjectType checks directory contents to determine the project's language/type.
+func detectProjectType(contents []os.DirEntry) (projectType string, isGitRepo bool) {
+	projectType = "unknown"
+	isGitRepo = false
+
+	// Define priority list of files to check for project type
+	typeCheck := map[string]string{
+		"go.mod":           "go",
+		"Cargo.toml":       "rust",
+		"package.json":     "node",
+		"requirements.txt": "python",
+		"mix.exs":          "elixir",
+		"build.zig":        "zig",
 	}
-	var projectsCount int
-	for _, entry := range entries {
-		if entry.IsDir() {
-			projectsCount += 1
 
-			projectName := entry.Name()
-			projectType := "unknown"
-			gitRepo := "❌"
+	for _, c := range contents {
+		name := c.Name()
 
-			contents, err := os.ReadDir(path.Join(projectsDir + projectName))
-			if err != nil {
-				cli.Exit(fmt.Sprintf("Unable to read dir: %v", err), 1)
+		// Check for Git repository
+		if name == ".git" && c.IsDir() {
+			isGitRepo = true
+		}
+
+		// Check for project type (only set if currently unknown)
+		if projectType == "unknown" && !c.IsDir() {
+			if t, ok := typeCheck[name]; ok {
+				projectType = t
 			}
+		}
 
-			for _, c := range contents {
-				if c.Name() == ".git" && c.IsDir() {
-					gitRepo = "✔️"
-				}
-
-				if projectType == "unknown" && !c.IsDir() {
-					switch c.Name() {
-					case "go.mod":
-						projectType = "go"
-					case "Cargo.toml":
-						projectType = "rust"
-					case "package.json":
-						projectType = "node"
-					case "requirements.txt":
-						fallthrough
-					case ".venv":
-						projectType = "python"
-					case "mix.exs":
-						projectType = "elixir"
-					case "build.zig":
-						projectType = "zig"
-					}
-				}
-			}
-
-			fmt.Printf(" - %s | type: %s | git repo?: %s\n", projectName, projectType, gitRepo)
+		if projectType != "unknown" && isGitRepo {
+			break
 		}
 	}
-	fmt.Printf("Projects count: %d\n", projectsCount)
+
+	// Handle Python secondary check (for simple projects lacking requirements.txt but maybe having .venv)
+	if projectType == "unknown" {
+		for _, c := range contents {
+			if c.Name() == ".venv" && c.IsDir() {
+				projectType = "python"
+				break
+			}
+		}
+	}
+
+	return projectType, isGitRepo
+}
+
+// listProjects handles the 'forge list' command.
+func listProjects(c *cli.Context) error {
+	// 1. Read the projects directory
+	entries, err := os.ReadDir(projectsDir)
+	if err != nil {
+		return cli.Exit(fmt.Sprintf(ColorRed+"Error reading projects directory: %v"+ColorReset, err), 1)
+	}
+
+	var projectsCount int
+	const sepLine = "------------------------------------------------------"
+
+	// Clean, aligned header
+	fmt.Printf(StyleBold+"\nProjects Directory: %s\n"+ColorReset, projectsDir)
+	fmt.Println(ColorBlue + sepLine + ColorReset)
+	fmt.Printf(StyleBold + "| %-20s | %-10s | %-5s |\n" + ColorReset, "PROJECT NAME", "TYPE", "GIT")
+	fmt.Println(ColorBlue + sepLine + ColorReset)
+
+
+	// 2. Iterate and process each directory
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue // Skip files
+		}
+
+		projectName := entry.Name()
+		projectPath := path.Join(projectsDir, projectName)
+
+		// Read directory contents to check for project type and git status
+		contents, err := os.ReadDir(projectPath)
+		if err != nil {
+			log.Printf(ColorYellow+"[ ⚠️ ] Warning: Could not read contents of directory %s: %v"+ColorReset, projectName, err)
+			continue
+		}
+
+		// Use the detection function
+		projectType, isGitRepo := detectProjectType(contents)
+
+		projectsCount++
+
+		// Colorize status
+		gitRepoStatus := ColorRed + "❌" + ColorReset
+		if isGitRepo {
+			gitRepoStatus = ColorGreen + "✔️" + ColorReset
+		}
+
+		// Colorize type
+		typeColor := ColorReset // Default
+		switch projectType {
+		case "go":
+			typeColor = ColorBlue
+		case "rust":
+			typeColor = ColorRed
+		case "node":
+			typeColor = ColorGreen
+		case "python":
+			typeColor = ColorYellow
+		default:
+			typeColor = ColorReset
+		}
+
+		// 3. Print the results using fixed-width alignment
+		// Use ColorReset immediately after the color code to avoid issues with alignment
+		fmt.Printf("| "+StyleBold+"%-20s "+ColorReset+"| %s%-10s%s | %s%-5s %s|\n",
+			projectName,
+			typeColor, projectType, ColorReset,
+			gitRepoStatus, "", ColorReset)
+	}
+
+	// Clean footer
+	fmt.Println(ColorBlue + sepLine + ColorReset)
+	fmt.Printf(StyleBold+"Total projects found: %d\n\n"+ColorReset, projectsCount)
+
 	return nil
 }
 
@@ -197,7 +275,7 @@ func main() {
 	app := &cli.App{
 		Name:    "forge",
 		Usage:   "A simple Go project initializer",
-		Version: "0.1.1",
+		Version: "0.1.3",
 		Commands: []*cli.Command{
 			{
 				Name:      "new",
@@ -242,3 +320,4 @@ func main() {
 		log.Fatal(err)
 	}
 }
+
