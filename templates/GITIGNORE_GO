@@ -1,0 +1,24 @@
+# Binaries for programs
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.o
+
+# Test binary, built with go test -c
+*-test
+
+# Output of the go build command
+/bin/
+/pkg/
+/tmp/
+
+# External libraries (if vendored)
+/vendor/
+
+# Dependencies for IDEs/Tools
+.idea/
+.vscode/
+`
