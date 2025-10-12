@@ -1,4 +1,3 @@
-
 # {{PROJECT_NAME}}
 
 ## Project Type: {{PROJECT_KIND}}
