@@ -1,6 +1,6 @@
 # forge
 
-create go projects
+forge is a cli tool to create go projects
 
 ## Usage
 
